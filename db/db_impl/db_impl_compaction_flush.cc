@@ -1343,13 +1343,13 @@ Status DBImpl::CompactFilesImpl(
           "yet supported in CompactFiles()");
     }
   }
-
+  printf("Before Pick InputFiles\n");
   Status s = cfd->compaction_picker()->SanitizeCompactionInputFiles(
       &input_set, cf_meta, output_level);
   if (!s.ok()) {
     return s;
   }
-
+  printf("After Pick InputFiles\n");
   std::vector<CompactionInputFiles> input_files;
   s = cfd->compaction_picker()->GetCompactionInputsFromFileNumbers(
       &input_files, &input_set, version->storage_info(), compact_options);
@@ -1419,6 +1419,8 @@ Status DBImpl::CompactFilesImpl(
       &blob_callback_, &bg_compaction_scheduled_,
       &bg_bottom_compaction_scheduled_);
 
+  printf("PreCompaction Job Ready\n");
+
   // Creating a compaction influences the compaction score because the score
   // takes running compactions into account (by skipping files that are already
   // being compacted). Since we just changed compaction score, we recalculate it
@@ -1437,7 +1439,14 @@ Status DBImpl::CompactFilesImpl(
   TEST_SYNC_POINT("CompactFilesImpl:3");
   mutex_.Lock();
 
+
+  
+
   Status status = compaction_job.Install(*c->mutable_cf_options());
+
+
+
+
   if (status.ok()) {
     assert(compaction_job.io_status().ok());
     InstallSuperVersionAndScheduleWork(c->column_family_data(),
@@ -2607,9 +2616,9 @@ ColumnFamilyData* DBImpl::PickCompactionFromQueue(
   assert(*token == nullptr);
   autovector<ColumnFamilyData*> throttled_candidates;
   ColumnFamilyData* cfd = nullptr;
-  while (!compaction_queue_.empty()) {
-    auto first_cfd = *compaction_queue_.begin();
-    compaction_queue_.pop_front();
+  while (!compaction_queue_.empty()) { //当队列不为空时
+    auto first_cfd = *compaction_queue_.begin(); //取队列头的任务
+    compaction_queue_.pop_front(); //删除队列头的任务
     assert(first_cfd->queued_for_compaction());
     if (!RequestCompactionToken(first_cfd, false, token, log_buffer)) {
       throttled_candidates.push_back(first_cfd);
@@ -2924,6 +2933,7 @@ void DBImpl::BackgroundCallFlush(Env::Priority thread_pri) {
   }
 }
 
+//触发compaction的后台线程
 void DBImpl::BackgroundCallCompaction(PrepickedCompaction* prepicked_compaction,
                                       Env::Priority bg_thread_pri) {
   bool made_progress = false;
@@ -2932,6 +2942,9 @@ void DBImpl::BackgroundCallCompaction(PrepickedCompaction* prepicked_compaction,
   LogBuffer log_buffer(InfoLogLevel::INFO_LEVEL,
                        immutable_db_options_.info_log.get());
   {
+    //在Pick的过程中加db锁
+    //在BackgroundCompaction构造完compaction_job之前都需要加锁
+    //Compaction_job.Run()会解锁，跑完再加锁
     InstrumentedMutexLock l(&mutex_);
 
     // This call will unlock/lock the mutex to wait for current running
@@ -2947,6 +2960,7 @@ void DBImpl::BackgroundCallCompaction(PrepickedCompaction* prepicked_compaction,
     assert((bg_thread_pri == Env::Priority::BOTTOM &&
             bg_bottom_compaction_scheduled_) ||
            (bg_thread_pri == Env::Priority::LOW && bg_compaction_scheduled_));
+    //进行Compaction
     Status s = BackgroundCompaction(&made_progress, &job_context, &log_buffer,
                                     prepicked_compaction, bg_thread_pri);
     TEST_SYNC_POINT("BackgroundCallCompaction:1");
@@ -3051,6 +3065,8 @@ void DBImpl::BackgroundCallCompaction(PrepickedCompaction* prepicked_compaction,
   }
 }
 
+//BackgroundCompaction是整个Compaction的PostMaster
+//其中最主要的三个阶段是Compaction::Prepare、Compaction::Run and Compaction::Install
 Status DBImpl::BackgroundCompaction(bool* made_progress,
                                     JobContext* job_context,
                                     LogBuffer* log_buffer,
@@ -3059,7 +3075,7 @@ Status DBImpl::BackgroundCompaction(bool* made_progress,
   ManualCompactionState* manual_compaction =
       prepicked_compaction == nullptr
           ? nullptr
-          : prepicked_compaction->manual_compaction_state;
+          : prepicked_compaction->manual_compaction_state; //看一下有没有手动触发的Compaction
   *made_progress = false;
   mutex_.AssertHeld();
   TEST_SYNC_POINT("DBImpl::BackgroundCompaction:Start");
@@ -3169,6 +3185,7 @@ Status DBImpl::BackgroundCompaction(bool* made_progress,
       return Status::OK();
     }
 
+    //从Queue中拿取Compaction任务
     auto cfd = PickCompactionFromQueue(&task_token, log_buffer);
     if (cfd == nullptr) {
       // Can't find any executable task from the compaction queue.
@@ -3425,6 +3442,8 @@ Status DBImpl::BackgroundCompaction(bool* made_progress,
         db_id_, db_session_id_, c->column_family_data()->GetFullHistoryTsLow(),
         c->trim_ts(), &blob_callback_, &bg_compaction_scheduled_,
         &bg_bottom_compaction_scheduled_);
+
+    //Step1: Prepare()
     compaction_job.Prepare();
 
     NotifyOnCompactionBegin(c->column_family_data(), c.get(), status,
@@ -3432,11 +3451,13 @@ Status DBImpl::BackgroundCompaction(bool* made_progress,
     mutex_.Unlock();
     TEST_SYNC_POINT_CALLBACK(
         "DBImpl::BackgroundCompaction:NonTrivial:BeforeRun", nullptr);
+    //Step2: Run()
     // Should handle erorr?
     compaction_job.Run().PermitUncheckedError();
     TEST_SYNC_POINT("DBImpl::BackgroundCompaction:NonTrivial:AfterRun");
     mutex_.Lock();
 
+    //Step3: Install()
     status = compaction_job.Install(*c->mutable_cf_options());
     io_s = compaction_job.io_status();
     if (status.ok()) {

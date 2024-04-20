@@ -165,6 +165,12 @@ struct FileSampledStats {
 };
 
 struct FileMetaData {
+
+  //下面两个是自己加的
+  std::string fname;
+  uint64_t fnumber;
+
+
   FileDescriptor fd;
   InternalKey smallest;            // Smallest internal key served by table
   InternalKey largest;             // Largest internal key served by table

@@ -11,7 +11,7 @@
 #include "rocksdb/file_system.h"
 #include "rocksdb/io_status.h"
 #include "rocksdb/rocksdb_namespace.h"
-
+#include <iostream>
 namespace ROCKSDB_NAMESPACE {
 class Logger;
 
@@ -94,7 +94,11 @@ class CountedFileSystem : public FileSystemWrapper {
   IOStatus NewSequentialFile(const std::string& f, const FileOptions& options,
                              std::unique_ptr<FSSequentialFile>* r,
                              IODebugContext* dbg) override;
-
+  IOStatus SetFileLifetime(std::string fname, 
+                                   uint64_t lifetime, int clock, bool flag, int level, std::vector<std::string> overlap_list) {
+    std::cout << fname << lifetime << '\n';
+    return IOStatus::NotSupported("SetFileLifetime");
+  }
   IOStatus NewRandomAccessFile(const std::string& f,
                                const FileOptions& file_opts,
                                std::unique_ptr<FSRandomAccessFile>* r,

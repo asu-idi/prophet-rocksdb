@@ -28,7 +28,7 @@ namespace ROCKSDB_NAMESPACE {
 class Arena : public Allocator {
  public:
   // No copying allowed
-  Arena(const Arena&) = delete;
+  //Arena(const Arena&) = delete;
   void operator=(const Arena&) = delete;
 
   static const size_t kInlineSize = 2048;

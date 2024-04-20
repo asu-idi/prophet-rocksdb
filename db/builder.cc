@@ -43,6 +43,12 @@
 
 namespace ROCKSDB_NAMESPACE {
 
+extern void get_predict(int level, const FileMetaData &file, Version *v, const Compaction* compaction_, int &predict_, int &predict_type_, int &tmp_rank);
+extern void set_deleted_time(int fnumber, int clock);
+extern void update_fname(uint64_t id, std::string name);
+extern std::string get_fname(uint64_t id);
+extern int get_clock();
+
 class TableFactory;
 
 TableBuilder* NewTableBuilder(const TableBuilderOptions& tboptions,
@@ -147,10 +153,31 @@ Status BuildTable(
       bool use_direct_writes = file_options.use_direct_writes;
       TEST_SYNC_POINT_CALLBACK("BuildTable:create_file", &use_direct_writes);
 #endif  // !NDEBUG
-      IOStatus io_s = NewWritableFile(fs, fname, &file, file_options);
+      //file_options.lifetime = 1000;
+      FileOptions tmp_file_options = file_options;
+      tmp_file_options.lifetime = 100;
+
+      update_fname(meta->fd.GetNumber(), fname);
+      //在这里写入
+      IOStatus io_s = NewWritableFile(fs, fname, &file, tmp_file_options);
+
+
+      int predict;
+      int predict_type;
+      int rank;
+      const int output_level = 0;
+
+      get_predict(output_level, *meta, versions->GetColumnFamilySet()->GetDefault()->current(), nullptr, predict, predict_type, rank);
+      set_deleted_time(meta->fnumber, predict + get_clock());
+      printf("meta->fname=%s get_clock=%d lifetime=%d\n", fname.c_str(), get_clock(), predict + get_clock());
+      fs->SetFileLifetime(fname, predict + get_clock(), get_clock(), 0, output_level, std::vector<std::string> {});
+
+
+
+
       assert(s.ok());
       s = io_s;
-      if (io_status->ok()) {
+      if (io_status->ok()) {  
         *io_status = io_s;
       }
       if (!s.ok()) {

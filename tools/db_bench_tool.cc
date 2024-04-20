@@ -3231,7 +3231,13 @@ class Benchmark {
   //     ----------------------------
   //     |        key 00000         |
   //     ----------------------------
+  //num_keys: key_number that need to generate
+  //
   void GenerateKeyFromInt(uint64_t v, int64_t num_keys, Slice* key) {
+    // const int range = 1500000;
+    // if(v > range) {
+    //   v %= range;
+    // }
     if (!keys_.empty()) {
       assert(FLAGS_use_existing_keys);
       assert(keys_.size() == static_cast<size_t>(num_keys));
@@ -3239,6 +3245,7 @@ class Benchmark {
       *key = keys_[v];
       return;
     }
+
     char* start = const_cast<char*>(key->data());
     char* pos = start;
     if (keys_per_prefix_ > 0) {
@@ -3260,6 +3267,7 @@ class Benchmark {
     }
 
     int bytes_to_fill = std::min(key_size_ - static_cast<int>(pos - start), 8);
+    //printf("GenerateKeyFromInt v=%ld key_size_=%d bytes_to_fill=%d num_keys=%ld keys_per_prefix=%ld port::kLittleEndian=%d start=%s\n", v, key_size_, bytes_to_fill, num_keys, keys_per_prefix_, port::kLittleEndian, start);
     if (port::kLittleEndian) {
       for (int i = 0; i < bytes_to_fill; ++i) {
         pos[i] = (v >> ((bytes_to_fill - i - 1) << 3)) & 0xFF;

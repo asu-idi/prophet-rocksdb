@@ -1679,7 +1679,7 @@ Status Version::GetPropertiesOfAllTables(TablePropertiesCollection* props,
 }
 
 Status Version::GetPropertiesOfTablesInRange(
-    const Range* range, std::size_t n, TablePropertiesCollection* props) const {
+    const Range* range, std::size_t n, TablePropertiesCollection* props)  {
   for (int level = 0; level < storage_info_.num_non_empty_levels(); level++) {
     for (decltype(n) i = 0; i < n; i++) {
       // Convert user_key into a corresponding internal key.
@@ -1759,10 +1759,11 @@ void Version::GetColumnFamilyMetaData(ColumnFamilyMetaData* cf_meta) {
 
   auto* ioptions = cfd_->ioptions();
   auto* vstorage = storage_info();
-
+  //printf("Version::GetColumnFamilyMetaData: NumberLevels()=%d\n", cfd_->NumberLevels());
   for (int level = 0; level < cfd_->NumberLevels(); level++) {
     uint64_t level_size = 0;
     cf_meta->file_count += vstorage->LevelFiles(level).size();
+    //printf("Version::GetColumnFamilyMetaData: Level=%d LevelFiles=%ld\n", level, vstorage->LevelFiles(level).size());
     std::vector<SstFileMetaData> files;
     for (const auto& file : vstorage->LevelFiles(level)) {
       uint32_t path_id = file->fd.GetPathId();
@@ -3756,6 +3757,44 @@ void SortFileByRoundRobin(const InternalKeyComparator& icmp,
 }
 }  // namespace
 
+void VersionStorageInfo::SortFileRR() {
+  printf("SorFileRR Begin");
+  for (int level = 0; level < num_levels() - 1; level++) {
+    const std::vector<FileMetaData*>& files = files_[level];
+    auto& files_by_compaction_pri = files_by_compaction_pri_[level];
+    assert(files_by_compaction_pri.size() == 0);
+
+    // populate a temp vector for sorting based on size
+    std::vector<Fsize> temp(files.size());
+    for (size_t i = 0; i < files.size(); i++) {
+      temp[i].index = i;
+      temp[i].file = files[i];
+    }
+
+    // sort the top number_of_files_to_sort_ based on file size
+    // size_t num = VersionStorageInfo::kNumberFilesToSort;
+    //if (num > temp.size()) {
+    //uint64_t num = temp.size();
+    //}
+
+
+    SortFileByRoundRobin(*internal_comparator_, &compact_cursor_,
+                          level0_non_overlapping_, level, &temp);
+
+  
+
+    // initialize files_by_compaction_pri_
+    for (size_t i = 0; i < temp.size(); i++) {
+      files_by_compaction_pri.push_back(static_cast<int>(temp[i].index));
+    }
+    next_file_to_compact_by_size_[level] = 0;
+    assert(files_[level].size() == files_by_compaction_pri_[level].size());
+  }
+  printf("SorFileRR End");
+
+}
+
+
 void VersionStorageInfo::UpdateFilesByCompactionPri(
     const ImmutableOptions& ioptions, const MutableCFOptions& options) {
   if (compaction_style_ == kCompactionStyleNone ||
@@ -3779,9 +3818,9 @@ void VersionStorageInfo::UpdateFilesByCompactionPri(
 
     // sort the top number_of_files_to_sort_ based on file size
     size_t num = VersionStorageInfo::kNumberFilesToSort;
-    if (num > temp.size()) {
+    //if (num > temp.size()) {
       num = temp.size();
-    }
+    //}
     switch (ioptions.compaction_pri) {
       case kByCompensatedSize:
         std::partial_sort(temp.begin(), temp.begin() + num, temp.end(),
@@ -3959,12 +3998,12 @@ bool VersionStorageInfo::OverlapInLevel(int level,
 void VersionStorageInfo::GetOverlappingInputs(
     int level, const InternalKey* begin, const InternalKey* end,
     std::vector<FileMetaData*>* inputs, int hint_index, int* file_index,
-    bool expand_range, InternalKey** next_smallest) const {
+    bool expand_range, InternalKey** next_smallest) {
   if (level >= num_non_empty_levels_) {
     // this level is empty, no overlapping inputs
     return;
   }
-
+  SetInputsTmp(inputs);
   inputs->clear();
   if (file_index) {
     *file_index = -1;

@@ -191,6 +191,9 @@ class CompactionJob {
   // Return the IO status
   IOStatus io_status() const { return io_status_; }
 
+  //自己加的，为了记录一下在CompactionJob::Run中得到的output_file
+  std::vector<const CompactionOutputs::Output*> tmp_files_output;
+
  protected:
   void UpdateCompactionStats();
   void LogCompaction();

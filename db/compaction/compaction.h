@@ -49,6 +49,7 @@ struct AtomicCompactionUnitBoundary {
   const InternalKey* largest = nullptr;
 };
 
+//使用此结构维护同一个level中所有的SST files
 // The structure that manages compaction input files associated
 // with the same physical level.
 struct CompactionInputFiles {
@@ -438,6 +439,7 @@ class Compaction {
   bool l0_files_might_overlap_;
 
   // Compaction input files organized by level. Constant after construction
+  //Compaction中的输入变量
   const std::vector<CompactionInputFiles> inputs_;
 
   // A copy of inputs_, organized more closely in memory

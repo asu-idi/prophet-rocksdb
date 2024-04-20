@@ -153,7 +153,7 @@ class LegacyRandomAccessFileWrapper : public FSRandomAccessFile {
 
   IOStatus MultiRead(FSReadRequest* fs_reqs, size_t num_reqs,
                      const IOOptions& /*options*/,
-                     IODebugContext* /*dbg*/) override {
+                     IODebugContext* /*dbg*/) override { 
     std::vector<ReadRequest> reqs;
     Status status;
 
@@ -404,6 +404,11 @@ class LegacyFileSystemWrapper : public FileSystem {
     if (s.ok()) {
       r->reset(new LegacyWritableFileWrapper(std::move(file)));
     }
+    return status_to_io_status(std::move(s));
+  }
+  IOStatus SetFileLifetime(std::string fname, 
+                                   uint64_t lifetime, int clock, bool flag, int level, std::vector<std::string> overlap_list) override {
+    Status s = target_->SetFileLifetime(fname, lifetime, clock, flag, level, overlap_list);
     return status_to_io_status(std::move(s));
   }
   IOStatus ReopenWritableFile(const std::string& fname,

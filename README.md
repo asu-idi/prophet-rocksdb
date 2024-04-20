@@ -1,31 +1,40 @@
-## RocksDB: A Persistent Key-Value Store for Flash and RAM Storage
+## Prophet
 
-[![CircleCI Status](https://circleci.com/gh/facebook/rocksdb.svg?style=svg)](https://circleci.com/gh/facebook/rocksdb)
-[![Appveyor Build status](https://ci.appveyor.com/api/projects/status/fbgfu0so3afcno78/branch/main?svg=true)](https://ci.appveyor.com/project/Facebook/rocksdb/branch/main)
-[![PPC64le Build Status](http://140-211-168-68-openstack.osuosl.org:8080/buildStatus/icon?job=rocksdb&style=plastic)](http://140-211-168-68-openstack.osuosl.org:8080/job/rocksdb)
+Build Prophet:
 
-RocksDB is developed and maintained by Facebook Database Engineering Team.
-It is built on earlier work on [LevelDB](https://github.com/google/leveldb) by Sanjay Ghemawat (sanjay@google.com)
-and Jeff Dean (jeff@google.com)
+Please make sure you have installed the required dependencies in [RocksDB](https://github.com/facebook/rocksdb/blob/main/INSTALL.md) and replace `<zoned block device>` to real ZNS SSD device name.
 
-This code is a library that forms the core building block for a fast
-key-value server, especially suited for storing data on flash drives.
-It has a Log-Structured-Merge-Database (LSM) design with flexible tradeoffs
-between Write-Amplification-Factor (WAF), Read-Amplification-Factor (RAF)
-and Space-Amplification-Factor (SAF). It has multi-threaded compactions,
-making it especially suitable for storing multiple terabytes of data in a
-single database.
+```bash
+sudo git clone https://github.com/asu-idi/prophet-rocksdb.git
+cd rocksdb
+sudo git clone https://github.com/asu-idi/prophet-zenfs.git
+sudo DISABLE_WARNING_AS_ERROR=1 ROCKSDB_PLUGINS=zenfs make -j db_bench install DEBUG_LEVEL=0
+pushd .
+cd plugin/zenfs/util
+sudo make
+popd
+```
 
-Start with example usage here: https://github.com/facebook/rocksdb/tree/main/examples
+initialize ZNS SSD device
 
-See the [github wiki](https://github.com/facebook/rocksdb/wiki) for more explanation.
+```bash
+echo deadline > /sys/class/block/<zoned block device>/queue/scheduler
+sudo ./plugin/zenfs/util/zenfs mkfs --zbd=<zoned block device> --aux_path=./temp --force
+```
 
-The public interface is in `include/`.  Callers should not include or
-rely on the details of any other header files in this package.  Those
-internal APIs may be changed without warning.
+# Benchmark
 
-Questions and discussions are welcome on the [RocksDB Developers Public](https://www.facebook.com/groups/rocksdb.dev/) Facebook group and [email list](https://groups.google.com/g/rocksdb) on Google Groups.
+run db_bench to test(the same config with paper in 64MB SST file size). 
 
-## License
+```bash
+sudo ./db_bench -num=400000000 -key_size=8 -value_size=256  -statistics=true -max_bytes_for_level_base=268435456  -target_file_size_base=67108864 -write_buffer_size=134217728 writable_file_max_buffer_size=134217728  -max_bytes_for_level_multiplier=4 -max_background_compactions=1 -max_background_flushes=1 -max_background_jobs=1 -soft_pending_compaction_bytes_limit=67108864 -hard_pending_compaction_bytes_limit=67108864 -level0_stop_writes_trigger=12 -level0_slowdown_writes_trigger=8 -level0_file_num_compaction_trigger=4 -max_write_buffer_number=1  -threads=1 -compaction_pri=4 -open_files=1000 -target_file_size_multiplier=1 --fs_uri=zenfs://dev:<zoned block device> --benchmarks='fillrandom,stats' --use_direct_io_for_flush_and_compaction
+```
 
-RocksDB is dual-licensed under both the GPLv2 (found in the COPYING file in the root directory) and Apache 2.0 License (found in the LICENSE.Apache file in the root directory).  You may select, at your option, one of the above-listed licenses.
+The evaluation result: 
+
+
+<div style="display: flex; justify-content: space-between;">
+    <img src="./allocation_migrated_data.jpg" alt="allocation_migrated_data" style="width: 30%;">
+    <img src="./allocation_wa.jpg" alt="allocation_wa" style="width: 30%;">
+    <img src="./allocation_zone_number.jpg" alt="allocation_zone_number" style="width: 30%;">
+</div>

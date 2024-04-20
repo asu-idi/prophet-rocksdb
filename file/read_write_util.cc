@@ -19,6 +19,7 @@ IOStatus NewWritableFile(FileSystem* fs, const std::string& fname,
                          const FileOptions& options) {
   TEST_SYNC_POINT_CALLBACK("NewWritableFile::FileOptions.temperature",
                            const_cast<Temperature*>(&options.temperature));
+  
   IOStatus s = fs->NewWritableFile(fname, options, result, nullptr);
   TEST_KILL_RANDOM_WITH_WEIGHT("NewWritableFile:0", REDUCE_ODDS2);
   return s;

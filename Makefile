@@ -10,6 +10,7 @@ BASH_EXISTS := $(shell which bash)
 SHELL := $(shell which bash)
 include common.mk
 
+USE_RTTI = 1
 CLEAN_FILES = # deliberately empty, so we can append below.
 CFLAGS += ${EXTRA_CFLAGS}
 CXXFLAGS += ${EXTRA_CXXFLAGS}

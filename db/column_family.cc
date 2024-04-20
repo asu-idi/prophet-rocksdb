@@ -1118,7 +1118,7 @@ Compaction* ColumnFamilyData::PickCompaction(
                imm_.current()->GetEarliestSequenceNumber(false));
   auto* result = compaction_picker_->PickCompaction(
       GetName(), mutable_options, mutable_db_options, current_->storage_info(),
-      log_buffer, earliest_mem_seqno);
+      log_buffer, earliest_mem_seqno); //PickCompaction来选择需要被Compact的文件
   if (result != nullptr) {
     result->SetInputVersion(current_);
   }

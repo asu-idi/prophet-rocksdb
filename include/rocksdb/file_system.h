@@ -160,6 +160,8 @@ struct FileOptions : EnvOptions {
   // handoff during file writes.
   ChecksumType handoff_checksum_type;
 
+  uint64_t lifetime;
+
   FileOptions() : EnvOptions(), handoff_checksum_type(ChecksumType::kCRC32c) {}
 
   FileOptions(const DBOptions& opts)
@@ -363,7 +365,8 @@ class FileSystem : public Customizable {
                                    const FileOptions& file_opts,
                                    std::unique_ptr<FSWritableFile>* result,
                                    IODebugContext* dbg) = 0;
-
+  virtual IOStatus SetFileLifetime(std::string fname, 
+                                   uint64_t lifetime, int clock, bool flag, int level, std::vector<std::string> overlap_list) = 0;
   // Create an object that writes to a file with the specified name.
   // `FSWritableFile::Append()`s will append after any existing content.  If the
   // file does not already exist, creates it.
@@ -1339,6 +1342,10 @@ class FileSystemWrapper : public FileSystem {
                            std::unique_ptr<FSWritableFile>* r,
                            IODebugContext* dbg) override {
     return target_->NewWritableFile(f, file_opts, r, dbg);
+  }
+  IOStatus SetFileLifetime(std::string fname, 
+                                   uint64_t lifetime, int clock, bool flag, int level, std::vector<std::string> overlap_list) override {
+    return target_->SetFileLifetime(fname, lifetime, clock, flag, level, overlap_list);
   }
   IOStatus ReopenWritableFile(const std::string& fname,
                               const FileOptions& file_opts,

@@ -99,6 +99,7 @@ class FileSystemTracingWrapper : public FileSystemWrapper {
 // is disabled.
 class FileSystemPtr {
  public:
+  FileSystemPtr() = default;
   FileSystemPtr(std::shared_ptr<FileSystem> fs,
                 const std::shared_ptr<IOTracer>& io_tracer)
       : fs_(fs), io_tracer_(io_tracer) {

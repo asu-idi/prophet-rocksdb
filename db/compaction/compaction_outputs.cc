@@ -11,9 +11,15 @@
 #include "db/compaction/compaction_outputs.h"
 
 #include "db/builder.h"
+#include "rocksdb/plugin/zenfs/fs/zbd_zenfs.h"
+#include <iostream>
 
 namespace ROCKSDB_NAMESPACE {
-
+extern void get_predict(int level, const FileMetaData &file, Version *v, const Compaction* compaction_, int &predict_, int &predict_type_, int &tmp_rank);
+extern void get_overlap(const FileMetaData &file, int target_level, Version *v, std::vector<std::string> &overlap_list);
+extern void set_deleted_time(int fnumber, int clock);
+extern int get_clock();
+extern std::string get_fname(uint64_t id);
 void CompactionOutputs::NewBuilder(const TableBuilderOptions& tboptions) {
   builder_.reset(NewTableBuilder(tboptions, file_writer_.get()));
 }
@@ -21,6 +27,44 @@ void CompactionOutputs::NewBuilder(const TableBuilderOptions& tboptions) {
 Status CompactionOutputs::Finish(const Status& intput_status,
                                  const SeqnoToTimeMapping& seqno_time_mapping) {
   FileMetaData* meta = GetMetaData();
+  int predict;
+  int predict_type;
+  int rank;
+  const int output_level = GetCompaction()->output_level();
+  printf("CompactionOutputs::Finish number=%ld get_clock=%d output_level=%d start_level=%d num_input_level=%ld\n", meta->fnumber, get_clock(), output_level, GetCompaction()->start_level(), GetCompaction()->num_input_levels());
+  get_predict(output_level, *meta, GetCompaction()->column_family_data()->current(), GetCompaction(), predict, predict_type, rank);
+  std::vector<std::string> overlap_list;
+  if(output_level + 1 <= 6) {
+    get_overlap(*meta, output_level + 1, GetCompaction()->column_family_data()->current(), overlap_list);
+  }
+  set_deleted_time(meta->fnumber, predict + get_clock());
+
+  //fs_->SetFileLifetime(get_fname(meta->fd.GetNumber()), predict + get_clock(), get_clock(), 0, (predict < 50) ? 1: output_level, overlap_list);
+  if(ENABLE_SHORT_WITH_TYPE0 != -1) {
+    fs_->SetFileLifetime(get_fname(meta->fd.GetNumber()), predict + get_clock(), get_clock(), 0, (predict < ENABLE_SHORT_WITH_TYPE0) ? 1 : output_level, overlap_list);
+  } else {
+    fs_->SetFileLifetime(get_fname(meta->fd.GetNumber()), predict + get_clock(), get_clock(), 0, output_level, overlap_list);
+  }
+  if(!update_input_file_lifetime) {
+    for(size_t i = 0; i < GetCompaction()->num_input_levels(); i++) {
+      //printf("vector[%ld] element:\n", i);
+      for(size_t j = 0; j < GetCompaction()->num_input_files(i); j++) {
+        FileMetaData *tmp = GetCompaction()->input(i, j);
+        fs_->SetFileLifetime(get_fname(tmp->fd.GetNumber()), get_clock(), get_clock(), 1, output_level, std::vector<std::string> {});
+      }
+    }
+    update_input_file_lifetime = 1;
+  }
+
+  
+
+  std::cout << "Finish:"
+            << meta->fd.GetNumber() 
+            << '[' << meta->smallest.user_key().ToString() <<  ','
+            << meta->largest.user_key().ToString() << ']' 
+            << "lifetime=" << predict
+            << '\n';
+
   assert(meta != nullptr);
   Status s = intput_status;
   if (s.ok()) {
@@ -76,6 +120,7 @@ IOStatus CompactionOutputs::WriterSyncClose(const Status& input_status,
   return io_s;
 }
 
+//重点观察对象
 Status CompactionOutputs::AddToOutput(
     const CompactionIterator& c_iter,
     const CompactionFileOpenFunc& open_file_func,
@@ -100,7 +145,7 @@ Status CompactionOutputs::AddToOutput(
 
   // Open output file if necessary
   if (!HasBuilder()) {
-    s = open_file_func(*this);
+    s = open_file_func(*this); //在这里调用OpenCompactionOutputFile
   }
   if (!s.ok()) {
     return s;

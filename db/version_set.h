@@ -128,9 +128,17 @@ class VersionStorageInfo {
                      VersionStorageInfo* src_vstorage,
                      bool _force_consistency_checks);
   // No copying allowed
-  VersionStorageInfo(const VersionStorageInfo&) = delete;
-  void operator=(const VersionStorageInfo&) = delete;
+ // VersionStorageInfo(const VersionStorageInfo&) = delete;
+//  void operator=(const VersionStorageInfo&) = delete;
   ~VersionStorageInfo();
+
+  std::vector<FileMetaData*>* inputs_tmp;
+
+  void SortFileRR();
+
+  void SetInputsTmp(std::vector<FileMetaData*>* inputs_) {
+    inputs_tmp = inputs_;
+  }
 
   void Reserve(int level, size_t size) { files_[level].reserve(size); }
 
@@ -258,7 +266,7 @@ class VersionStorageInfo {
                                   // range and overlap each other. If false,
                                   // then just files intersecting the range
       InternalKey** next_smallest = nullptr)  // if non-null, returns the
-      const;  // smallest key of next file not included
+      ;  // smallest key of next file not included
   void GetCleanInputsWithinInterval(
       int level, const InternalKey* begin,  // nullptr means before all keys
       const InternalKey* end,               // nullptr means after all keys
@@ -581,14 +589,17 @@ class VersionStorageInfo {
                                      const Slice& largest_user_key,
                                      int last_level, int last_l0_idx);
 
- private:
+ 
+  void UpdateFilesByCompactionPri(const ImmutableOptions& immutable_options,
+                                  const MutableCFOptions& mutable_cf_options);
+
+ 
+ public:
   void ComputeCompensatedSizes();
   void UpdateNumNonEmptyLevels();
   void CalculateBaseBytes(const ImmutableOptions& ioptions,
                           const MutableCFOptions& options);
-  void UpdateFilesByCompactionPri(const ImmutableOptions& immutable_options,
-                                  const MutableCFOptions& mutable_cf_options);
-
+ 
   void GenerateFileIndexer() {
     file_indexer_.UpdateIndex(&arena_, num_non_empty_levels_, files_);
   }
@@ -918,7 +929,7 @@ class Version {
   Status GetPropertiesOfAllTables(TablePropertiesCollection* props);
   Status GetPropertiesOfAllTables(TablePropertiesCollection* props, int level);
   Status GetPropertiesOfTablesInRange(const Range* range, std::size_t n,
-                                      TablePropertiesCollection* props) const;
+                                      TablePropertiesCollection* props) ;
 
   // Print summary of range delete tombstones in SST files into out_str,
   // with maximum max_entries_to_print entries printed out.
@@ -944,6 +955,9 @@ class Version {
 
   int TEST_refs() const { return refs_; }
 
+  VersionStorageInfo storage_info_instance() {
+    return storage_info_;
+  }
   VersionStorageInfo* storage_info() { return &storage_info_; }
   const VersionStorageInfo* storage_info() const { return &storage_info_; }
 

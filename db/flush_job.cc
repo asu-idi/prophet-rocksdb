@@ -48,6 +48,16 @@
 
 namespace ROCKSDB_NAMESPACE {
 
+enum LOG_TYPE {
+  FLUSH = 1,
+  COMPACTION = 2,
+  OTHER = 10
+};
+
+extern void log_print(const char *s, LOG_TYPE log_type, int level, Compaction *c);
+extern void after_flush_or_compaction(VersionStorageInfo *vstorage, int level, std::vector<const CompactionOutputs::Output*> files_output, ColumnFamilyData* cfd, Compaction* const compaction);
+
+
 const char* GetFlushReasonString (FlushReason flush_reason) {
   switch (flush_reason) {
     case FlushReason::kOthers:
@@ -299,6 +309,7 @@ Status FlushJob::Run(LogsWithPrepTracker* prep_tracker, FileMetaData* file_meta,
   } else if (write_manifest_) {
     TEST_SYNC_POINT("FlushJob::InstallResults");
     // Replace immutable memtable with the generated Table
+    // Install
     s = cfd_->imm()->TryInstallMemtableFlushResults(
         cfd_, mutable_cf_options_, mems_, prep_tracker, versions_, db_mutex_,
         meta_.fd.GetNumber(), &job_context_->memtables_to_free, db_directory_,
@@ -313,6 +324,10 @@ Status FlushJob::Run(LogsWithPrepTracker* prep_tracker, FileMetaData* file_meta,
   }
   RecordFlushIOStats();
 
+  if(edit_->GetNewFiles().size() != 0) {
+    log_print("Flush", LOG_TYPE::FLUSH, edit_->GetNewFiles().back().first, nullptr);
+  }
+
   // When measure_io_stats_ is true, the default 512 bytes is not enough.
   auto stream = event_logger_->LogToBuffer(log_buffer_, 1024);
   stream << "job" << job_context_->job_id << "event"
@@ -326,6 +341,10 @@ Status FlushJob::Run(LogsWithPrepTracker* prep_tracker, FileMetaData* file_meta,
     stream << vstorage->NumLevelFiles(level);
   }
   stream.EndArray();
+
+
+  after_flush_or_compaction(cfd_->current()->storage_info(), 0, std::vector<const CompactionOutputs::Output*>{}, nullptr, nullptr);
+
 
   const auto& blob_files = vstorage->GetBlobFiles();
   if (!blob_files.empty()) {
@@ -946,6 +965,9 @@ Status FlushJob::WriteLevel0Table() {
           job_context_->job_id, io_priority, &table_properties_, write_hint,
           full_history_ts_low, blob_callback_, &num_input_entries,
           &memtable_payload_bytes, &memtable_garbage_bytes);
+
+
+
       // TODO: Cleanup io_status in BuildTable and table builders
       assert(!s.ok() || io_s.ok());
       io_s.PermitUncheckedError();

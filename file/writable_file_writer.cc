@@ -76,14 +76,20 @@ IOStatus WritableFileWriter::Append(const Slice& data, uint32_t crc32c_checksum,
          cap *= 2) {
       // See whether the next available size is large enough.
       // Buffer will never be increased to more than max_buffer_size_.
-      size_t desired_capacity = std::min(cap * 2, max_buffer_size_);
+      //size_t desired_capacity = std::min(cap * 2, max_buffer_size_);
+      size_t desired_capacity = 134217728;
       if (desired_capacity - buf_.CurrentSize() >= left ||
           (use_direct_io() && desired_capacity == max_buffer_size_)) {
+        //printf("Extent buffer true now_capacity=%ld Capacity=%ld CurrentSize=%ld left=%ld\n", 
+       //        buf_.Capacity() + desired_capacity, buf_.Capacity(), buf_.CurrentSize(), left);
         buf_.AllocateNewBuffer(desired_capacity, true);
+       
         break;
       }
     }
   }
+
+//  printf("use_direct_io? %d\n", use_direct_io());
 
   // Flush only when buffered I/O
   if (!use_direct_io() && (buf_.Capacity() - buf_.CurrentSize()) < left) {
@@ -139,6 +145,7 @@ IOStatus WritableFileWriter::Append(const Slice& data, uint32_t crc32c_checksum,
     // or we simply use it for its original purpose to accumulate many small
     // chunks
     if (use_direct_io() || (buf_.Capacity() >= left)) {
+     // printf("postion3\n");
       while (left > 0) {
         size_t appended = buf_.Append(src, left);
         if (perform_data_verification_ && buffered_data_with_checksum_) {
@@ -149,6 +156,7 @@ IOStatus WritableFileWriter::Append(const Slice& data, uint32_t crc32c_checksum,
         src += appended;
 
         if (left > 0) {
+          printf("position4 Capacity=%ld CurrentSize=%ld left=%ld\n", buf_.Capacity(), buf_.CurrentSize(), left); //avoid enter here
           s = Flush(op_rate_limiter_priority);
           if (!s.ok()) {
             break;

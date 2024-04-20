@@ -459,7 +459,7 @@ class FilterNumber : public CompactionFilter {
 
  private:
   mutable std::string last_merge_operand_key_;
-  uint64_t num_;
+uint64_t num_;
 };
 
 inline std::string EncodeInt(uint64_t x) {
